@@ -1,0 +1,293 @@
+---
+title: "Thinned PP Simulation"
+author: "Jorge Sicacha"
+date: "12/10/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE,echo=F}
+setwd("/Users/jorgespa/Documents/Research/DataIntegration/DeadBirds")
+source("functionssimu.R")
+```
+
+## Simulating the data
+
+We'll simulate two Gaussian Random Fields. One linked to the ecological process and other related to the sampling process. We'll start by defining the parameters of the GRFs, the mesh and the priors for the hyperparameters as well as the covariates that are part of each process. 
+
+```{r cars}
+## Defining a window for the model ##
+coordsmat <- matrix(c(0,0,3,0,3,3,0,3,0,0),ncol=2,byrow=T)
+aa <- SpatialPolygons(list(Polygons(list(Polygon(coordsmat)),ID=1)))
+win <- as.owin(aa)
+
+## Defining parameters for both GRFs ##
+
+seed=1036610602
+RFoptions(seed=seed)
+sigma2x <- 0.2
+range <- 1.2
+meanf <- 3
+betacov <- -0.5
+mean_thin <- 0.3
+betacov_thin <- -1
+sigma2x_thin <- 2.5
+range_thin <- 0.35
+
+
+## Defining the mesh and priors for the hyperparameters 
+
+mesh <- inla.mesh.2d(loc.domain = coordsmat, offset = c(0.3, 1),
+                     max.edge = c(0.1, 0.5), cutoff = 0.2)
+
+spde1 <- inla.spde2.pcmatern(mesh = mesh,
+                            # PC-prior on range: P(practic.range < 0.05) = 0.01
+                            prior.range = c(1.2, 0.5),
+                            # PC-prior on sigma: P(sigma > 1) = 0.01
+                            prior.sigma = c(0.45, 0.5))
+
+spde2 <- inla.spde2.pcmatern(mesh = mesh,
+                             # PC-prior on range: P(practic.range < 0.05) = 0.01
+                             prior.range = c(2.5, 0.5),
+                             # PC-prior on sigma: P(sigma > 1) = 0.01
+                             prior.sigma = c(1.58, 0.5))
+
+
+## Defining the covariates 
+
+
+x0 <- seq(min(mesh$loc[, 1]), max(mesh$loc[, 1]), length = 100)
+y0 <- seq(min(mesh$loc[, 2]), max(mesh$loc[, 2]), length = 100)
+gridlocs <- expand.grid(x0,y0)
+gridcov <- outer(x0, y0, function(x,y) cos(x) - sin(y - 2))
+covariate.im <- im(gridcov, x0, y0)
+
+gridcov_thin <- outer(x0, y0, function(x,y) (x/2)^2+(y/2)^2)
+covariate_thin.im <- im(gridcov_thin, x0, y0)
+
+par(mfrow=c(1,2))
+plot(covariate.im)
+plot(covariate_thin.im)
+```
+
+Now, based on the parameters and the covariates defined, we simulate two point patterns. The first one is the true point pattern associated to our species, defined as:
+
+$log(\lambda(\textbf{s})) = \beta_0 + \beta_1 cov_1 + \omega_1(\textbf{s})$
+
+with $\omega_1(\textbf{s})$ the GRF linked to the ecological process.
+```{r pp1, echo=FALSE, warning=F,message=F}
+Eco_PP <- rLGCP(model="matern",mu=im(meanf + betacov*gridcov ,xcol=x0,yrow=y0),
+                 var=sigma2x,scale=range/sqrt(8),nu=1,win = win)
+
+Lam <- attr(Eco_PP, 'Lambda')
+
+Eco_GRF  <- log(Lam$v)
+
+xs <- Lam$xcol
+ys <- Lam$yrow
+xys <- expand.grid(xs,ys)
+
+df.sp <- SpatialPointsDataFrame(coords = xys,data = data.frame(w=c(anti_t(rotate(rotate(log(Lam$v)))))))
+r <- raster(df.sp)
+r1<-disaggregate(r, fact=res(r)/c(0.025,0.025))
+w1.rast <- rasterize(df.sp@coords,r1,df.sp$w, fun=mean,na.rm=T)
+```
+```{r plotpp1, echo=FALSE, warning=F,message=F,fig.cap="w1 and the true point pattern for the ecological process"}
+plot(w1.rast)
+points(Eco_PP,pch=19,cex=0.2)
+```
+
+Next, we simulate the second GRF, which will serve as both an additional source of information for the sampling process and the thinning process. It will produce a second point pattern with intensity explained as:
+
+$log(\lambda^*(\textbf{s})) = \beta^*_0 + \beta^*_1 cov_2 + \omega_2(\textbf{s})$
+
+with $\omega_2(\textbf{s})$ the GRF linked to the sampling process.
+
+
+```{r pp2, echo=FALSE, warning=F,message=F}
+Samp_PP <- rLGCP(model="matern",mu=im(mean_thin + betacov_thin*gridcov_thin ,xcol=x0,yrow=y0),
+                var=sigma2x_thin,scale=range_thin/sqrt(8),nu=1,win = win)
+
+Lam <- attr(Samp_PP, 'Lambda')
+
+Samp_GRF  <- log(Lam$v)
+```
+
+```{r plotpp2, echo=FALSE, warning=F,message=F,fig.cap="w2 and the point pattern for the sampling process"}
+df.sp2 <- SpatialPointsDataFrame(coords = xys,data = data.frame(w=c(anti_t(rotate(rotate(log(Lam$v))))),
+                                                                ew=c(anti_t(rotate(rotate((Lam$v)))))))
+
+r <- raster(df.sp2)
+r1<-disaggregate(r, fact=res(r)/c(0.025,0.025))
+w2.rast <- rasterize(df.sp2@coords,r1,df.sp2$w, fun=mean,na.rm=T)
+plot(w2.rast)
+points(Samp_PP,pch=19,cex=0.2)
+```
+
+To finish the simulation of the data, we have to thin the original process based on retaining probabilities computed as:
+
+$p_r(\textbf{s}) = \frac{\lambda^*(\textbf{s})}{1 + \lambda^*(\textbf{s})}$
+
+Which is equivalent to the expression:
+
+$logit(p_r(\textbf{s})) = \beta^*_0 + \beta^*_1 cov_2 + \omega_2(\textbf{s})$
+
+```{r pp3, echo=FALSE, warning=F,message=F}
+Retprobs <- psych::logistic(df.sp2$w)
+
+Retprobs.im <- im(Retprobs,xcol = Lam$xcol,yrow = Lam$yrow)
+
+df.sp2$retprob <- psych::logistic(df.sp2$w)
+
+retprobslik2 <- interp.im(Retprobs.im, 
+                          x = Eco_PP$x,
+                          y = Eco_PP$y)
+
+Eco_PP <- SpatialPointsDataFrame(coords = cbind(Eco_PP$x,Eco_PP$y),data=data.frame(retprob=retprobslik2))
+Eco_PP$retain <- apply(Eco_PP@data, 1,function(x){rbinom(1,1,p=x[1])})
+
+Eco_PPFinal <- Eco_PP[which(Eco_PP$retain==1),]
+Samp_PPFinal <- SpatialPoints(coords=cbind(Samp_PP$x,Samp_PP$y))
+```
+
+```{r plotpp3, echo=FALSE, warning=F,message=F,fig.cap="w1, w2, and the thinned point pattern for the ecological process"}
+r <- raster(df.sp2)
+r1<-disaggregate(r, fact=res(r)/c(0.025,0.025))
+prob.rast <- rasterize(df.sp2@coords,r1,df.sp2$retprob, fun=mean,na.rm=T)
+par(mfrow=c(1,2))
+plot(w1.rast)
+points(Eco_PP,pch=19,cex=0.5,col="grey")
+points(Eco_PPFinal,pch=19,cex=0.3,col="red")
+
+plot(prob.rast)
+points(Eco_PP,pch=19,cex=0.5,col="grey")
+points(Eco_PPFinal,pch=19,cex=0.3,col="red")
+```
+
+
+## Fitting the model
+
+Now that we've simulated our point patterns we aim at fitting the next model:
+
+$
+\begin{aligned}
+\log(\lambda_{obs}(\textbf{s})) = \log(\lambda(\textbf{s})p(\textbf{s}))&= \log(\lambda(\textbf{s})) + \log(p(\textbf{s})) \\
+& =\beta_0 + \beta_1 cov_1 + \omega_1(\textbf{s}) - \log(1 + \exp(-(\beta^*_0 + \beta^*_1 cov_2 + \omega_2(\textbf{s}))))
+\end{aligned}
+log(\lambda^*(\textbf{s})) = \beta^*_0 + \beta^*_1 cov_2 + \omega_2(\textbf{s})
+$
+
+We'll do it using \textit{inlabru}. To do that, we first turn our covariates into SpatialPixelsDataFrame objects.
+
+
+```{r covs_sp, echo=FALSE, warning=F,message=F}
+gridlocsmesh.grid <- expand.grid(x0,y0)
+
+cov1.sp <- SpatialPointsDataFrame(coords = gridlocsmesh.grid,data = data.frame(cov=c(anti_t(rotate(rotate(covariate.im$v))))))
+r <- raster(cov1.sp)
+r1<-disaggregate(r, fact=res(r)/c(0.075,0.075))
+cov1.rast <- rasterize(cov1.sp@coords,r1,cov1.sp$cov, fun=mean,na.rm=T)
+plot(cov1.rast)
+cov1.spix <- as(cov1.rast,"SpatialPixelsDataFrame")
+
+cov2.sp <- SpatialPointsDataFrame(coords = gridlocsmesh.grid,data = data.frame(cov=c(anti_t(rotate(rotate(covariate_thin.im$v))))))
+r <- raster(cov2.sp)
+r1<-disaggregate(r, fact=res(r)/c(0.075,0.075))
+cov2.rast <- rasterize(cov2.sp@coords,r1,cov2.sp$cov, fun=mean,na.rm=T)
+plot(cov2.rast)
+cov2.spix <- as(cov1.rast,"SpatialPixelsDataFrame")
+```
+
+Next, we create the components object, as well as the likelihoods. Finally, the model is fitted by calling the function \textit{bru}. \textbf{NOTE:} In order to make this code run, it is advisable to have R-4.0 installed and the developement version of inlabru (remotes::install_github("fbachl/inlabru", ref="devel")).  
+
+```{r inlabru, echo=FALSE, warning=F,message=F}
+library(inlabru)
+cmp<- ~ -1 + beta0 + beta0thin +
+        w1(map = coordinates, model = spde1) + w2(map = coordinates, model = spde2) +
+        cov1(map=cov1.spix,model="linear") + cov2(map=cov2.spix,model="linear")
+
+fun <- function(x,y,z){
+  -log(1+exp(-(x+y+z)))
+}
+
+lik1 <- like("cp",
+             formula = coordinates ~ beta0  + cov1 + w1 + fun(beta0thin,cov2,w2),
+             data = Eco_PPFinal,
+             components = cmp,
+             domain = list(coordinates = mesh),
+             samplers = aa)
+
+lik2 <- like("cp",
+             formula = coordinates ~ beta0thin + cov2 + w2,
+             data = Samp_PPFinal,
+             components = cmp,
+             domain = list(coordinates = mesh),
+             samplers = aa)
+# 
+# 
+inlabru:::iinla.setOption("iinla.verbose", TRUE)
+fit2 <- bru(cmp, lik1, lik2,options = list(control.inla = list(strategy = "gaussian",
+                                                               int.strategy = "eb"),
+                                           max.iter=20))
+
+fit2$summary.fixed
+fit2$summary.hyperpar
+
+```
+
+Now, we see how good our results are:
+
+```{r plotres, echo=FALSE, warning=F,message=F}
+par(mfrow=c(2,4))
+plot(fit2$marginals.hyperpar$`Range for w1`,type="l",col="red",xlim=c(0,20))
+abline(v=range,col="blue",lty=2,lwd=2)
+plot(fit2$marginals.hyperpar$`Stdev for w1`,type="l",col="red",xlim=c(0,2))
+abline(v=sqrt(sigma2x),col="blue",lty=2,lwd=2)
+plot(fit2$marginals.fixed$beta0,type="l",col="red")
+abline(v=meanf,col="blue",lty=2,lwd=2)
+plot(fit2$marginals.fixed$cov1,type="l",col="red")
+abline(v=betacov,col="blue",lty=2,lwd=2)
+
+plot(fit2$marginals.hyperpar$`Range for w2`,type="l",col="red",xlim=c(0,20))
+abline(v=range_thin,col="blue",lty=2,lwd=2)
+plot(fit2$marginals.hyperpar$`Stdev for w2`,type="l",col="red",xlim=c(0,2))
+abline(v=sqrt(sigma2x_thin),col="blue",lty=2,lwd=2)
+plot(fit2$marginals.fixed$beta0thin,type="l",col="red")
+abline(v=mean_thin,col="blue",lty=2,lwd=2)
+plot(fit2$marginals.fixed$cov2,type="l",col="red")
+abline(v=betacov_thin,col="blue",lty=2,lwd=2)
+```
+
+Good for the ecological process! Not that good for the sampling process yet :(
+
+Finally, we predict our two processes and compare them visually against the true processes:
+
+```{r plotpred, echo=FALSE, warning=F,message=F}
+predpoints <- expand.grid(x=seq(0,3,length.out = 128),y=seq(0,3,length.out = 128))
+cov1.pred <- interp.im(covariate.im, 
+                      x = predpoints[,1],
+                      y = predpoints[,2])
+predpoints <- SpatialPointsDataFrame(predpoints,data=data.frame(cov1=cov1.pred))
+
+pr_eco = predict(fit2, predpoints, ~ beta0 + cov1 + w1)
+r <- raster(pr_eco)
+r1<-disaggregate(r, fact=res(r)/c(0.025,0.025))
+pred.rast.median.bru_eco <- rasterize(pr_eco@coords,r1,pr_eco$median, fun=mean,na.rm=T)
+pred.rast.sd.bru_eco <- rasterize(pr_eco@coords,r1,pr_eco$sd, fun=mean,na.rm=T)
+
+
+pr_sampling = predict(fit2, predpoints, ~ beta0thin + cov2 + w2)
+r <- raster(pr_sampling)
+r1<-disaggregate(r, fact=res(r)/c(0.025,0.025))
+pred.rast.median.bru_samp <- rasterize(pr_sampling@coords,r1,pr_sampling$median, fun=mean,na.rm=T)
+pred.rast.sd.bru_samp <- rasterize(pr_sampling@coords,r1,pr_sampling$sd, fun=mean,na.rm=T)
+
+par(mfrow=c(2,3))
+plot(pred.rast.median.bru_eco)#,zlim=c(0.9,4.1))
+points(Eco_PPFinal,pch=19,cex=0.2)
+plot(pred.rast.sd.bru_eco)
+plot(w1.rast)
+
+plot(pred.rast.median.bru_samp)#,zlim=c(0.9,4.1))
+plot(pred.rast.sd.bru_samp)
+plot(w2.rast)
+```
