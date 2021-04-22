@@ -3,7 +3,7 @@
 ## INPUT ##
 ###########
 setwd("/Users/jorgespa/Documents/Research/DataIntegration/DeadBirds")
-source("functionssimu.R")
+#source("functionssimu.R")
 nspecies = 4
 
 ## For the species we're interested in (Species 1)
@@ -27,16 +27,36 @@ input <- list(
       range = c(1.2, 2.5, 3.2, 0.22)
     )
   ),
-  sampling = list(),
-  detection = list()
+  sampling = list(
+    fixed.effect = list(
+      intercept = c(1.3),
+      betacov = c(-1.5)
+    ),
+  hyperparameters=list(
+    sigma2 = c(0.2),
+    range = c(2.5)
+  )
+    ),
+  detection = list(
+    
+    fixed.effect = list(
+      intercept=c(2,-0.3, 5, 1.2),
+      betacov = c(-2, -0.5, -2.5, 2)
+      )
+  ),
+  
+  misclassification = list(
+    
+    class_prob <- matrix(c(0.9, 0.02, 0.04, 0.04,
+                           0.05, 0.89, 0.04, 0.02,
+                           0.1,0.1, 0.8, 0,
+                           0, 0.05, 0.25, 0.7),
+                         nrow=4, ncol=4, byrow = TRUE)
+    
+    
+  )
 )
 
-thin_input <- list(
-  mean_thin = 1.3,
-  betacov_thin = -1.5,
-  sigma2x_thin = 0.2,
-  range_thin = 2.5
-)
 
 seed= 1036610602
 
@@ -58,7 +78,9 @@ idxs <- list(eco=c(1),sampling=c(2),detection=c(3))
 
 cov <- list(covariate.im,covariate_thin.im,covariate_detect.im)
 
-csdata <- function(nspecies,input,thin_input,cov,idxs,domain=NULL,seed){
+plot <- list(ecological=TRUE,detection=FALSE,sampling=TRUE,all=TRUE,classification=FALSE)
+
+csdata <- function(nspecies,input,cov,idxs,domain=NULL,seed,plot=list(all=TRUE),colmatrix=NULL){
   
   setwd("/Users/jorgespa/Documents/Research/DataIntegration/DeadBirds")
   source("functionssimu.R")
@@ -66,12 +88,12 @@ csdata <- function(nspecies,input,thin_input,cov,idxs,domain=NULL,seed){
   RFoptions(seed=seed)
   
   
-  domain <- NULL
+  domain <- NULL ##Remove later
   ## Where the simulation is performed ##
   if(is.null(domain)){
     coordsmat <- matrix(c(0,0,3,0,3,3,0,3,0,0),ncol=2,byrow=T)
     aa <- SpatialPolygons(list(Polygons(list(Polygon(coordsmat)),ID=1)))
-    #win <- as.owin(aa) ##Need maptools
+    win <- as.owin(aa) ##Need maptools
   }
   
   ## Mesh for models ##
@@ -114,7 +136,7 @@ csdata <- function(nspecies,input,thin_input,cov,idxs,domain=NULL,seed){
     #Indexes ##  
     eco_idxs <- idxs$eco
     sampling_idxs <- idxs$sampling
-    detect_idxs <- idxs$detection
+    detection_idxs <- idxs$detection
     
     eco_covs.im <- covs.im[eco_idxs]
     eco_covs.raster <- covs.raster[eco_idxs]
@@ -124,9 +146,9 @@ csdata <- function(nspecies,input,thin_input,cov,idxs,domain=NULL,seed){
     sampling_covs.raster <- covs.raster[sampling_idxs]
     sampling_covs.sppixels <- covs.sppixels[sampling_idxs]
     
-    detect_covs.im <- covs.im[detect_idxs]
-    detect_covs.raster <- covs.raster[detect_idxs]
-    detect_covs.sppixels <- covs.sppixels[detect_idxs]
+    detection_covs.im <- covs.im[detect_idxs]
+    detection_covs.raster <- covs.raster[detect_idxs]
+    detection_covs.sppixels <- covs.sppixels[detect_idxs]
     
     ## Generate ecological process ##
     
@@ -143,12 +165,131 @@ csdata <- function(nspecies,input,thin_input,cov,idxs,domain=NULL,seed){
     eco_linpred <- paste(c("input$ecological$fixed.effect[[1]][i]",eco_form),collapse="+")
     
     for(i in 1:nspecies){
+      x0 <- eco_covs.im[[1]]$xcol
+      y0 <- eco_covs.im[[1]]$yrow
       Eco_PP[[i]] <- rLGCP(model="matern",mu=eval(parse(text=eco_linpred)),
-                           var=input$ecological$hyperparameters[[1]][i],scale=input$ecological$hyperparameters[[2]][i]/sqrt(8),nu=1)
+                           var=input$ecological$hyperparameters[[1]][i],scale=input$ecological$hyperparameters[[2]][i]/sqrt(8),nu=1,win = win,xy=list(x=x0,y=y0))
       
     }
     
+    # Storing the raster of the true intensity for each species
+    species_rast <- list()
+    for(i in 1:nspecies){
+      Lam <- attr(Eco_PP[[i]], 'Lambda')
+      
+      Eco_GRF  <- log(Lam$v)
+      gridlocs <- expand.grid(x0,y0) ##  Matching resolutions between gridlocs and covariates
+      df.sp <- SpatialPointsDataFrame(coords = gridlocs,data = data.frame(w=c(anti_t(rotate(rotate(log(Lam$v)))))))
+      r <- raster(df.sp)
+      r1<-disaggregate(r, fact=res(r)/c(0.056,0.056))
+      w1.rast <- rasterize(df.sp@coords,r1,df.sp$w, fun=mean,na.rm=T)
+      w1.rastaa <- crop(w1.rast,aa)
+      species_rast[[i]] <- mask(w1.rastaa,aa)
+    }
     
+    #### First thinning stage ##
+    
+    firststage <- firstthinning(input)
+    
+    ## Second thinning stage ##
+    
+    secondstage <- secondthinning(input)
+    
+    ## Second thinning stage ##
+    
+    thirdstage <- thirdthinning(input)
+    
+    if(plot$all==TRUE){
+      ##True ecological ##
+      lapply(1:nspecies,function(x){plot(species_rast[[x]],axes=F,box=F,main=paste0("True Ecological State for species",x))
+        points(Eco_PP[[x]],pch=19,cex=0.5) })
+      
+      ## Detection##
+      
+      lapply(1:nspecies,function(x){plot(secondstage$detectionprobraster[[x]],axes=F,box=F,main=paste0("Detection probability for species ",x))
+        points(firststage$Eco_PPFinal[[x]],pch=19,cex=0.5)
+        points(secondstage$Eco_PPFinal_detect[[x]],pch=19,cex=0.3,col="red") })
+        
+      ## Sampling ##
+      lapply(1:nspecies,function(x){plot(firststage$retainprobraster,axes=F,box=F,main=paste0("Retaining probability for species ",x))
+        points(Eco_PP[[x]],pch=19,cex=0.5)
+        points(firststage$Eco_PPFinal[[x]],pch=19,cex=0.3,col="red")
+      })
+      
+      ## Classification ##
+      if(is.null(colmatrix)){
+        colmatrix <- matrix(NA,nrow=nspecies,ncol=2)
+        colmatrix[,1] <- sample(colors(),size = nspecies,replace = FALSE)
+        colmatrix[,2] <- as.numeric(sample(0:25,size = nspecies,replace = FALSE))
+        colmatrix <- data.frame(colmatrix)
+        names(colmatrix) <- c("color","pch")
+        colmatrix$pch <- as.numeric(colmatrix$pch)
+      }
+      
+      for(i in 1:nspecies){
+        plot(aa,axes=F,main=paste0("CS reports for species ",i))
+        points(thirdstage$classifications[which(thirdstage$classifications$true_species==i),],pch=colmatrix[i,2],cex=1,col=colmatrix[i,1])
+        indexes0 <- 1:nspecies
+        indexes <- indexes0[-indexes0[which(indexes0==i)]]
+        for(j in indexes){
+          try(points(thirdstage$classifications[which(thirdstage$classifications$true_species==i & thirdstage$classifications$error==j),],pch=colmatrix[j,2],cex=0.6,col=colmatrix[j,1]))
+        }
+        legendtext <- paste0("Species ",1:nspecies)
+        legend("right", legend=legendtext,col=colmatrix$color,pch=colmatrix$pch)
+      }
+      
+    }
+    else{
+      plotnew <- within(plot,rm(all))
+      which.plot <- names(plotnew[sapply(plotnew,isTRUE)])
+      
+      if("ecological"%in%which.plot){
+        lapply(1:nspecies,function(x){plot(species_rast[[x]],axes=F,box=F,main=paste0("True Ecological State for species",x))
+          points(Eco_PP[[x]],pch=19,cex=0.5)
+        })
+      }
+      
+      if("detection"%in%which.plot){
+        lapply(1:nspecies,function(x){plot(secondstage$detectionprobraster[[x]],axes=F,box=F,main=paste0("Detection probability for species ",x))
+          points(firststage$Eco_PPFinal[[x]],pch=19,cex=0.5)
+          points(secondstage$Eco_PPFinal_detect[[x]],pch=19,cex=0.3,col="red")
+          
+        })
+        
+      }
+      
+      if("sampling"%in%which.plot){
+        lapply(1:nspecies,function(x){plot(firststage$retainprobraster,axes=F,box=F,main=paste0("Retaining probability for species ",x))
+          points(Eco_PP[[x]],pch=19,cex=0.5)
+          points(firststage$Eco_PPFinal[[x]],pch=19,cex=0.3,col="red")
+        })
+      }
+      
+      if("classification"%in%which.plot){
+        if(is.null(colmatrix)){
+        colmatrix <- matrix(NA,nrow=nspecies,ncol=2)
+        colmatrix[,1] <- sample(colors(),size = nspecies,replace = FALSE)
+        colmatrix[,2] <- as.numeric(sample(0:25,size = nspecies,replace = FALSE))
+        colmatrix <- data.frame(colmatrix)
+        names(colmatrix) <- c("color","pch")
+        colmatrix$pch <- as.numeric(colmatrix$pch)
+        }
+        
+        for(i in 1:nspecies){
+          plot(aa,axes=F,main=paste0("CS reports for species ",i))
+          points(thirdstage$classifications[which(thirdstage$classifications$true_species==i),],pch=colmatrix[i,2],cex=1,col=colmatrix[i,1])
+          indexes0 <- 1:nspecies
+          indexes <- indexes0[-indexes0[which(indexes0==i)]]
+          for(j in indexes){
+          try(points(thirdstage$classifications[which(thirdstage$classifications$true_species==i & thirdstage$classifications$error==j),],pch=colmatrix[j,2],cex=0.6,col=colmatrix[j,1]))
+          }
+          legendtext <- paste0("Species ",1:nspecies)
+          legend("right", legend=legendtext,col=colmatrix$color,pch=colmatrix$pch)
+          }
+        
+      }
+      
+    }
     
     
   }
@@ -156,3 +297,5 @@ csdata <- function(nspecies,input,thin_input,cov,idxs,domain=NULL,seed){
     stop("Covariates input should be a list")
   }
 }
+
+csdata(nspecies=nspecies,input=input,cov=cov,idxs=idxs,seed=seed)
