@@ -2,7 +2,7 @@
 ###########
 ## INPUT ##
 ###########
-setwd("/Users/jorgespa/Documents/Research/DataIntegration/DeadBirds")
+#setwd("/Users/jorgespa/Documents/Research/DataIntegration/DeadBirds")
 #source("functionssimu.R")
 nspecies = 4
 
@@ -82,8 +82,8 @@ plot <- list(ecological=TRUE,detection=FALSE,sampling=TRUE,all=TRUE,classificati
 
 csdata <- function(nspecies,input,cov,idxs,domain=NULL,seed,plot=list(all=TRUE),colmatrix=NULL){
   
-  setwd("/Users/jorgespa/Documents/Research/DataIntegration/DeadBirds")
-  source("functionssimu.R")
+  #setwd("/Users/jorgespa/Documents/Research/DataIntegration/DeadBirds")
+  #source("functionssimu.R")
   set.seed(seed)
   RFoptions(seed=seed)
   
@@ -146,9 +146,9 @@ csdata <- function(nspecies,input,cov,idxs,domain=NULL,seed,plot=list(all=TRUE),
     sampling_covs.raster <- covs.raster[sampling_idxs]
     sampling_covs.sppixels <- covs.sppixels[sampling_idxs]
     
-    detection_covs.im <- covs.im[detect_idxs]
-    detection_covs.raster <- covs.raster[detect_idxs]
-    detection_covs.sppixels <- covs.sppixels[detect_idxs]
+    detection_covs.im <- covs.im[detection_idxs]
+    detection_covs.raster <- covs.raster[detection_idxs]
+    detection_covs.sppixels <- covs.sppixels[detection_idxs]
     
     ## Generate ecological process ##
     
@@ -187,17 +187,18 @@ csdata <- function(nspecies,input,cov,idxs,domain=NULL,seed,plot=list(all=TRUE),
       species_rast[[i]] <- mask(w1.rastaa,aa)
     }
     
+    #environment_list <- as.list(environment())
     #### First thinning stage ##
-    
+    #print(length(environment_list))
     firststage <- firstthinning(input)
     
     ## Second thinning stage ##
-    
-    secondstage <- secondthinning(input)
+    environment_list <- as.list(environment())
+    secondstage <- secondthinning(input,environment_list)
     
     ## Second thinning stage ##
-    
-    thirdstage <- thirdthinning(input)
+    environment_list <- as.list(environment())
+    thirdstage <- thirdthinning(input,environment_list)
     
     if(plot$all==TRUE){
       ##True ecological ##
