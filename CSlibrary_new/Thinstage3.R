@@ -15,8 +15,9 @@ thirdthinning <- function(input, ...){
 
       
   for(i in 1:nspecies){
+    if(length(environment_list$secondstage$Eco_PPFinal_detect[[i]])>0){
     environment_list$secondstage$Eco_PPFinal_detect[[i]]$error <- apply(environment_list$secondstage$Eco_PPFinal_detect[[i]]@data, 1,function(x){which(rmultinom(1,1,p=(class_prob[i,]))==1)})
-    environment_list$secondstage$Eco_PPFinal_detect[[i]]$true_species <- i
+    environment_list$secondstage$Eco_PPFinal_detect[[i]]$true_species <- i}
   }
   
   #Putting all the data together

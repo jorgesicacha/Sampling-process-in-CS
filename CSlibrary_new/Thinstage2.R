@@ -21,9 +21,12 @@ secondthinning <- function(input, ...){
   #Point pattern from thinning due to detection
   Eco_PPFinal_detect <- list()
   for(i in 1:nspecies){
+    if(length(environment_list$firststage$Eco_PPFinal[[i]])>0){
     environment_list$firststage$Eco_PPFinal[[i]]$retain_detect <- sapply(1:length(environment_list$firststage$Eco_PPFinal[[i]]),
                                              function(x){rbinom(1,1,p=det_PP[[i]][x])})
     Eco_PPFinal_detect[[i]] <- environment_list$firststage$Eco_PPFinal[[i]][which(environment_list$firststage$Eco_PPFinal[[i]]$retain_detect==1),]
+    }
+    else{Eco_PPFinal_detect[[i]] <- environment_list$firststage$Eco_PPFinal[[i]]}
   }
   
   ## Making rasters of detection probability ##
