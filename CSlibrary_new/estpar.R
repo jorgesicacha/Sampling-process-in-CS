@@ -69,26 +69,24 @@ est_par <- function(omega,csdata,cssampdata,detdata,covs,region,mesh){
     return(ret)
   }
   
-  library(inlabru)
-  
   
   lik1 <- lik2 <- lik3 <- list()
   
   for(i in 1:nspecies){
-    lik1[[i]] <- like("cp",
+    lik1[[i]] <- inlabru::like("cp",
                       formula = as.formula(paste0("coordinates ~ beta0",i,"  + cov1",i," + w1",i, "+ beta0thin + cov2 + w2 + fun(beta0thin,cov2,w2)+ beta0det",i,"+cov3",i,"+fun1(beta0det",i,", cov3",i,")",
                                                   "+fun2",i,"(beta01, cov11, w11, beta02, cov12, w12,beta03, cov13, w13,beta04, cov14, w14)")),
                       data = Eco_PPFinal_detect[[i]],
                       #components = cmp,
                       domain = list(coordinates = mesh),
                       samplers = aa)
-    lik2[[i]] <- like("cp",
+    lik2[[i]] <- inlabru::like("cp",
                       formula = coordinates ~ beta0thin + cov2 + w2,
                       data = Samp_PPFinal,
                       #components = cmp,
                       domain = list(coordinates = mesh),
                       samplers = aa)
-    lik3[[i]] <- like("binomial",
+    lik3[[i]] <- inlabru::like("binomial",
                       formula = as.formula(paste0("detdata",i," ~ beta0det",i," + cov3",i)),
                       data = data_det_spframe[[i]],
                       #components = cmp,
@@ -130,7 +128,7 @@ est_par <- function(omega,csdata,cssampdata,detdata,covs,region,mesh){
   #nemes(cov1.spix) <- "cov11"
   names(cov2.spix)<- "cov2"
   #names(cov3.spix) <- paste0("cov3",i)
-  fit2 <- bru(cmp, lik1[[1]], lik1[[2]],lik1[[3]],lik1[[4]],
+  fit2 <- inlabru::bru(cmp, lik1[[1]], lik1[[2]],lik1[[3]],lik1[[4]],
               lik2[[1]],
               lik3[[1]],lik3[[2]],lik3[[3]],lik3[[4]],
               options = list(control.inla = list(strategy = "gaussian",
