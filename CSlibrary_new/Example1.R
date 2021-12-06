@@ -271,7 +271,7 @@ for(i in 1:nspecies){
 par(mfrow=c(4,2),mar=c(0,0,0,0))
 for(i in 1:nspecies){
   ## Ecological process ##
-  plot(species_rast[[i]])
+  plot(simulateddata$species_raster[[i]])
   plot(pred.median.eco[[i]])
 }
 par(mfrow=c(1,2),mar=c(0,0,0,0))
