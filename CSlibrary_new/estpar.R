@@ -1,5 +1,12 @@
-est_par <- function(omega,csdata,cssampdata,detdata,covs,region,mesh){
+est_par <- function(omega){
   
+  csdata <- get("csdata",envir = parent.frame())
+  cssampdata <- get("cssampdata",envir = parent.frame())
+  detdata <- get("detdata",envir = parent.frame())
+  covs <- get("covs",envir = parent.frame())
+  region <- get("region",envir = parent.frame())
+  mesh <- get("mesh",envir = parent.frame())
+   
   # Organizing the inputs
   nspecies = nrow(omega)
   tmp <- csdata$classification
