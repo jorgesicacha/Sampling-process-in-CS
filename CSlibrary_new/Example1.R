@@ -166,11 +166,17 @@ spde2 <- inla.spde2.pcmatern(mesh = mesh,
                              # PC-prior on sigma: P(sigma > 1) = 0.01
                              prior.sigma = c(sqrt(input$sampling$hyperparameters$sigma2), 0.5))
 
-
-source("estpar.R")
+csdata = simulateddata$thirdstage
+cssampdata = simulateddata$firststage$Samp_PPFinal
+detdata = data_det_spframe
 covslist <- list(cov1.spix,cov2.spix,cov3.spix)
 spdeslist <- list(spdes=spdes,spde2=spde2)
-fit2 <- est_par(omega=class_prob,csdata = simulateddata$thirdstage,cssampdata = simulateddata$firststage$Samp_PPFinal,detdata = data_det_spframe,covs = covslist,region=poly,mesh=mesh)
+covs = covslist
+region=poly
+mesh=mesh
+
+source("estpar.R")
+fit2 <- est_par(omega=class_prob)
 
 ## prediction and results ##
 
