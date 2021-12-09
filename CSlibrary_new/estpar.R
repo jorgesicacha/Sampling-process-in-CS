@@ -141,14 +141,38 @@ est_par <- function(omega){
               options = list(control.inla = list(strategy = "gaussian",
                                                  int.strategy = "eb"),
                              max.iter=50))
-  alpha0 <- alpha1 <- beta0 <- beta1 <- c()
+  alpha0 <- alpha1 <- beta0 <- beta1 <- gamma0 <- gamma1<- c()
   tmp <- fit2$marginals.fixed
   for(i in 1:nspecies){
     beta0 <- c(beta0,INLA::inla.emarginal(function(x) x,tmp[paste0("beta0",i)][[1]]))
     beta1 <- c(beta1,INLA::inla.emarginal(function(x) x,tmp[paste0("cov1",i)][[1]]))
+    alpha0 <- c(alpha0, INLA::inla.emarginal(function(x) x,tmp[paste0("beta0thin")][[1]]))
+    alpha1 <- c(alpha1, INLA::inla.emarginal(function(x) x,tmp[paste0("cov2")][[1]]))
+    gamma0 <- c(gamma0,INLA::inla.emarginal(function(x) x,tmp[paste0("beta0det",i)][[1]]))
+    gamma1 <- c(gamma1,INLA::inla.emarginal(function(x) x,tmp[paste0("cov3",i)][[1]]))
     #beta0 <- c(beta0,INLA::inla.emarginal(function(x) x,tmp[paste0("beta0",i)][[1]]))
     #beta0 <- c(beta0,INLA::inla.emarginal(function(x) x,tmp[paste0("beta0",i)][[1]]))
-    }
-  return(fit2)
+  }
+  ret <- c(beta0, beta1, alpha0, alpha1, gamma0, gamma1)
+  return(ret)
 }
 
+nimble_INLA <- nimbleRcall(
+  prototype = function(
+    omega=double(2) #x is a matrix 
+ # beta is a vector
+  ) {},
+  returnType = double(1), # outcome is a vector
+  Rfun = 'est_par'
+)
+
+CnimbleINLA <- compileNimble(nimble_INLA)
+
+#Testing the compiled function. 
+#Should give the same results as fit.inla
+class_prob <- matrix(c(0.9, 0.02, 0.04, 0.04,
+                                       0.05, 0.89, 0.04, 0.02,
+                                       0.1,0.1, 0.8, 0,
+                                       0, 0.05, 0.25, 0.7),
+                                     nrow=4, ncol=4, byrow = TRUE)
+CnimbleINLA(class_prob)
