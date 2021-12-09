@@ -166,36 +166,51 @@ w2 <- sapply(fit2$marginals.random$w2,function(x){INLA::inla.emarginal(function(
 
 
 
-A.mat.11 <- INLA::inla.spde.make.A(mesh = mesh, loc = coordinates(lik1[[1]]$data))
-A.mat.12 <- INLA::inla.spde.make.A(mesh = mesh, loc = coordinates(lik1[[2]]$data))
-A.mat.13 <- INLA::inla.spde.make.A(mesh = mesh, loc = coordinates(lik1[[3]]$data))
-A.mat.14 <- INLA::inla.spde.make.A(mesh = mesh, loc = coordinates(lik1[[4]]$data))
-A.mat.21 <- INLA::inla.spde.make.A(mesh = mesh, loc = coordinates(lik1[[1]]$data))
-A.mat.22 <- INLA::inla.spde.make.A(mesh = mesh, loc = coordinates(lik1[[2]]$data))
-A.mat.23 <- INLA::inla.spde.make.A(mesh = mesh, loc = coordinates(lik1[[3]]$data))
-A.mat.24 <- INLA::inla.spde.make.A(mesh = mesh, loc = coordinates(lik1[[4]]$data))
-
-w11 <- (A.mat.11 %*% w11)[,1]
-w12 <- (A.mat.12 %*% w12)[,1]
-w13 <- (A.mat.13 %*% w13)[,1]
-w14 <- (A.mat.14 %*% w14)[,1]
-w21 <- (A.mat.21 %*% w2)[,1]
-w22 <- (A.mat.22 %*% w2)[,1]
-w23 <- (A.mat.23 %*% w2)[,1]
-w24 <- (A.mat.24 %*% w2)[,1]
-
-final.df <- list()
+obs.df <- list()
 for(i in 1:nspecies){
-final.df[[i]] <- data.frame(coordx = lik1[[i]]$data@coords[,1],coordy = lik1[[i]]$data@coords[,2],
-                       y=lik1[[i]]$data$BRU_response_cp,
-                       e=lik1[[i]]$data$BRU_E,
-                       beta01 = rep(beta0[[i]],length(lik1[[i]]$data)),beta11 = rep(beta1[[i]],length(lik1[[i]]$data)),
-                       alpha0 = rep(alpha0,length(lik1[[i]]$data)),alpha1 = rep(alpha1,length(lik1[[i]]$data)),
-                       gamma01 = rep(gamma0[[i]],length(lik1[[i]]$data)),gamma11 = rep(gamma1[[i]],length(lik1[[i]]$data)),
-                       w1=get(paste0("w1",i)),w2=get(paste0("w2",i)))
-}                                         
-                                            
-return(final.df)                                                  
+obs.df[[i]] <- data.frame(coordx = lik1[[i]]$data@coords[,1],coordy = lik1[[i]]$data@coords[,2],
+                       y=lik1[[i]]$data$BRU_response_cp
+                       )
+
+obs.df[[i]] <- obs.df[[i]][which(obs.df[[i]]$y==1),]
+names(obs.df[[i]])[3:ncol(obs.df[[i]])] <- paste0(names(obs.df[[i]])[3:ncol(obs.df[[i]])],i)
+}
+
+full_reports <- Reduce(
+  function(x, y, ...) merge(x, y, all = TRUE, ...),
+  obs.df
+)
+
+full_reports[is.na(full_reports)] <- 0
+
+
+A.mat <- INLA::inla.spde.make.A(mesh = mesh, loc = as.matrix(full_reports[,1:2]))
+
+w11 <- (A.mat %*% w11)[,1]
+w12 <- (A.mat %*% w12)[,1]
+w13 <- (A.mat %*% w13)[,1]
+w14 <- (A.mat %*% w14)[,1]
+w2 <- (A.mat %*% w2)[,1]
+
+pars.df <- list()
+for(i in 1:nspecies){
+  pars.df[[i]] <- data.frame(coordx = full_reports$coordx,coordy = full_reports$coordy,
+                             beta0 = rep(beta0[[i]],nrow(full_reports)),beta1 = rep(beta1[[i]],nrow(full_reports)),
+                             alpha0 = rep(alpha0,nrow(full_reports)),alpha1 = rep(alpha1,nrow(full_reports)),
+                             gamma0 = rep(gamma0[[i]],nrow(full_reports)),gamma1 = rep(gamma1[[i]],nrow(full_reports)),
+                             w1=get(paste0("w1",i)),w2=w2)
+                             
+  names(pars.df[[i]])[3:ncol(pars.df[[i]])] <- paste0(names(pars.df[[i]])[3:ncol(pars.df[[i]])],i)
+}
+
+full_pars <- Reduce(
+  function(x, y, ...) merge(x, y, all = TRUE, ...),
+  pars.df
+)
+
+final_df <- merge(full_reports,full_pars,by=c("coordx","coordy"),all=TRUE)
+                                                
+return(final_df)                                                  
 }
 
 nimble_INLA <- nimbleRcall(
@@ -203,7 +218,7 @@ nimble_INLA <- nimbleRcall(
     omega=double(2) #x is a matrix 
  # beta is a vector
   ) {},
-  returnType = double(1), # outcome is a vector
+  returnType = double(2), # outcome is a vector
   Rfun = 'est_par'
 )
 
