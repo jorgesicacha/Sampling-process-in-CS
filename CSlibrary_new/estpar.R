@@ -142,19 +142,60 @@ est_par <- function(omega){
                                                  int.strategy = "eb"),
                              max.iter=50))
   alpha0 <- alpha1 <- beta0 <- beta1 <- gamma0 <- gamma1<- c()
+  alpha0 <- c(alpha0, INLA::inla.emarginal(function(x) x,tmp[paste0("beta0thin")][[1]]))
+  alpha1 <- c(alpha1, INLA::inla.emarginal(function(x) x,tmp[paste0("cov2")][[1]]))  
   tmp <- fit2$marginals.fixed
   for(i in 1:nspecies){
     beta0 <- c(beta0,INLA::inla.emarginal(function(x) x,tmp[paste0("beta0",i)][[1]]))
     beta1 <- c(beta1,INLA::inla.emarginal(function(x) x,tmp[paste0("cov1",i)][[1]]))
-    alpha0 <- c(alpha0, INLA::inla.emarginal(function(x) x,tmp[paste0("beta0thin")][[1]]))
-    alpha1 <- c(alpha1, INLA::inla.emarginal(function(x) x,tmp[paste0("cov2")][[1]]))
     gamma0 <- c(gamma0,INLA::inla.emarginal(function(x) x,tmp[paste0("beta0det",i)][[1]]))
     gamma1 <- c(gamma1,INLA::inla.emarginal(function(x) x,tmp[paste0("cov3",i)][[1]]))
     #beta0 <- c(beta0,INLA::inla.emarginal(function(x) x,tmp[paste0("beta0",i)][[1]]))
     #beta0 <- c(beta0,INLA::inla.emarginal(function(x) x,tmp[paste0("beta0",i)][[1]]))
   }
-  ret <- c(beta0, beta1, alpha0, alpha1, gamma0, gamma1)
-  return(ret)
+  #ret <- c(beta0, beta1, alpha0, alpha1, gamma0, gamma1)
+  #return(ret)
+                                            
+   ## The locations where information is needed 
+
+w11 <- sapply(fit2$marginals.random$w11,function(x){INLA::inla.emarginal(function(x) x,x)})
+w12 <- sapply(fit2$marginals.random$w12,function(x){INLA::inla.emarginal(function(x) x,x)})
+w13 <- sapply(fit2$marginals.random$w13,function(x){INLA::inla.emarginal(function(x) x,x)})
+w14 <- sapply(fit2$marginals.random$w14,function(x){INLA::inla.emarginal(function(x) x,x)})
+w2 <- sapply(fit2$marginals.random$w2,function(x){INLA::inla.emarginal(function(x) x,x)})
+
+
+
+A.mat.11 <- INLA::inla.spde.make.A(mesh = mesh, loc = coordinates(lik1[[1]]$data))
+A.mat.12 <- INLA::inla.spde.make.A(mesh = mesh, loc = coordinates(lik1[[2]]$data))
+A.mat.13 <- INLA::inla.spde.make.A(mesh = mesh, loc = coordinates(lik1[[3]]$data))
+A.mat.14 <- INLA::inla.spde.make.A(mesh = mesh, loc = coordinates(lik1[[4]]$data))
+A.mat.21 <- INLA::inla.spde.make.A(mesh = mesh, loc = coordinates(lik1[[1]]$data))
+A.mat.22 <- INLA::inla.spde.make.A(mesh = mesh, loc = coordinates(lik1[[2]]$data))
+A.mat.23 <- INLA::inla.spde.make.A(mesh = mesh, loc = coordinates(lik1[[3]]$data))
+A.mat.24 <- INLA::inla.spde.make.A(mesh = mesh, loc = coordinates(lik1[[4]]$data))
+
+w11 <- (A.mat.11 %*% w11)[,1]
+w12 <- (A.mat.12 %*% w12)[,1]
+w13 <- (A.mat.13 %*% w13)[,1]
+w14 <- (A.mat.14 %*% w14)[,1]
+w21 <- (A.mat.21 %*% w2)[,1]
+w22 <- (A.mat.22 %*% w2)[,1]
+w23 <- (A.mat.23 %*% w2)[,1]
+w24 <- (A.mat.24 %*% w2)[,1]
+
+final.df <- list()
+for(i in 1:nspecies){
+final.df[[i]] <- data.frame(coordx = lik1[[i]]$data@coords[,1],coordy = lik1[[i]]$data@coords[,2],
+                       y=lik1[[i]]$data$BRU_response_cp,
+                       e=lik1[[i]]$data$BRU_E,
+                       beta01 = rep(beta0[[i]],length(lik1[[i]]$data)),beta11 = rep(beta1[[i]],length(lik1[[i]]$data)),
+                       alpha0 = rep(alpha0,length(lik1[[i]]$data)),alpha1 = rep(alpha1,length(lik1[[i]]$data)),
+                       gamma01 = rep(gamma0[[i]],length(lik1[[i]]$data)),gamma11 = rep(gamma1[[i]],length(lik1[[i]]$data)),
+                       w1=get(paste0("w1",i)),w2=get(paste0("w2",i)))
+}                                         
+                                            
+return(final.df)                                                  
 }
 
 nimble_INLA <- nimbleRcall(
