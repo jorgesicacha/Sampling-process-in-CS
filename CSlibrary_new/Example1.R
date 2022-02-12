@@ -175,6 +175,14 @@ covs = covslist
 region=poly
 mesh=mesh
 
+data_df <- data.frame(
+C = csdata$classifications$error,
+Y = csdata$classifications$true_species,
+eco_cov = extract(cov1.rast,csdata$classifications),
+samp_cov= extract(cov2.rast,csdata$classifications),
+det_cov = extract(cov3.rast,csdata$classifications))
+                    
+                     
 source("estpar.R")
 fit2 <- est_par(omega=class_prob)
 
