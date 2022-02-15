@@ -142,9 +142,9 @@ est_par <- function(omega){
                                                  int.strategy = "eb"),
                              max.iter=50))
   alpha0 <- alpha1 <- beta0 <- beta1 <- gamma0 <- gamma1<- c()
+  tmp <- fit2$marginals.fixed
   alpha0 <- c(alpha0, INLA::inla.emarginal(function(x) x,tmp[paste0("beta0thin")][[1]]))
   alpha1 <- c(alpha1, INLA::inla.emarginal(function(x) x,tmp[paste0("cov2")][[1]]))  
-  tmp <- fit2$marginals.fixed
   for(i in 1:nspecies){
     beta0 <- c(beta0,INLA::inla.emarginal(function(x) x,tmp[paste0("beta0",i)][[1]]))
     beta1 <- c(beta1,INLA::inla.emarginal(function(x) x,tmp[paste0("cov1",i)][[1]]))
