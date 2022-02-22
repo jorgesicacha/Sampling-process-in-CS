@@ -13,26 +13,26 @@ code <-nimbleCode({
   
   for(i in 1:nsite){
    # for(j in 1:nspecies){
-    lambda_obs[i,1] <- r[i,7] + r[i,8]*true_cov[i] + r[i,13]+ 
+    log(lambda_obs[i,1]) <- r[i,7] + r[i,8]*true_cov[i] + r[i,13]+ 
       r[i, 9] + r[i,10]*bias_cov[i]+ r[i,14] - log(1+exp(r[i, 9] + r[i,10]*bias_cov[i]+ r[i,14])) + 
       r[i, 11] + r[i,12]*det_cov[i] - log(1+exp(r[i, 11] + r[i,12]*det_cov[i]))  
   # Second species
-    lambda_obs[i,2] <- r[i,15] + r[i,16]*true_cov[i] + r[i,21]+ 
+   log(lambda_obs[i,2]) <- r[i,15] + r[i,16]*true_cov[i] + r[i,21]+ 
       r[i, 17] + r[i,18]*bias_cov[i]+ r[i,22] - log(1+exp(r[i, 17] + r[i,18]*bias_cov[i]+ r[i,22])) + 
       r[i, 19] + r[i,20]*det_cov[i] - log(1+exp(r[i, 19] + r[i,20]*det_cov[i]))  
     # Third species
-    lambda_obs[i,3] <- r[i,23] + r[i,24]*true_cov[i] + r[i,29]+ 
+    log(lambda_obs[i,3]) <- r[i,23] + r[i,24]*true_cov[i] + r[i,29]+ 
       r[i, 25] + r[i,26]*bias_cov[i]+ r[i,30] - log(1+exp(r[i, 25] + r[i,26]*bias_cov[i]+ r[i,30])) + 
       r[i, 27] + r[i,28]*det_cov[i] - log(1+exp(r[i, 27] + r[i,28]*det_cov[i])) 
     # Third species
-    lambda_obs[i,4] <- r[i,31] + r[i,32]*true_cov[i] + r[i,37]+ 
-      r[i, 33] + r[i,34]*bias_cov[i]+ r[i,38] - log(1+exp(r[i, 33] + r[i,34]*bias_cov[i]+ r[i,38])) + 
+    log(lambda_obs[i,4]) <- r[i,31] + r[i,32]*true_cov[i] + r[i,37]+ 
+     r[i, 33] + r[i,34]*bias_cov[i]+ r[i,38] - log(1+exp(r[i, 33] + r[i,34]*bias_cov[i]+ r[i,38])) + 
       r[i, 35] + r[i,36]*det_cov[i] - log(1+exp(r[i,35] + r[i,36]*det_cov[i]))  
     
     # }
   }
 
-  log(lambda[1:nsite, 1:nspecies]) <- lambda_obs[1:nsite, 1:nspecies]
+  lambda[1:nsite, 1:nspecies] <- lambda_obs[1:nsite, 1:nspecies]
   
   #Proportion of lambdas
   
@@ -101,7 +101,7 @@ mwtc <- nimbleModel(code,
 Cmwtc <- compileNimble(mwtc,showCompilerOutput = FALSE) #Have issues compiling
 
 
-mcmcconf <- configureMCMC(Cmwtc, monitors = c("omega"))
+mcmcconf <- configureMCMC(Cmwtc, print=TRUE, useConjugacy=FALSE,monitors = c("omega"))
 
 Rmcmc <- buildMCMC(mcmcconf, 
                    enableWAIC =FALSE)
