@@ -1,5 +1,9 @@
 est_par <- function(omega){
   
+  inla.setOption(pardiso.license= "pardiso.lic")
+  control.compute=list(openmp.strategy="pardiso.parallel")
+  #inla.pardiso.check()
+  
   csdata <- get("csdata",envir = parent.frame())
   cssampdata <- get("cssampdata",envir = parent.frame())
   detdata <- get("detdata",envir = parent.frame())
