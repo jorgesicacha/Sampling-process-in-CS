@@ -183,3 +183,4 @@ data_df <- data.frame(
                        
 source("estpar.R")
   
+source("nimble_code.R")
