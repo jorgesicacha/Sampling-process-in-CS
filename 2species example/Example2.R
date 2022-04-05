@@ -180,4 +180,6 @@ data_df <- data.frame(
   samp_cov= extract(cov2.rast,csdata$classifications),
   det_cov = extract(cov3.rast,csdata$classifications))
   
+                       
+source("estpar.R")
   
