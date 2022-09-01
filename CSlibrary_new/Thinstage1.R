@@ -14,14 +14,19 @@ sampling_linpred <- paste(c("input$sampling$fixed.effect[[1]]",sampling_form),co
 x0 <-  environment_list$sampling_covs.im[[1]]$xcol
 y0 <-  environment_list$sampling_covs.im[[1]]$yrow
 Samp_PP <- rLGCP(model="matern",mu=eval(parse(text=sampling_linpred)),
-                 var=input$sampling$hyperparameters[[1]],scale=input$sampling$hyperparameters[[2]]/sqrt(8),nu=1,win = environment_list$win,xy=list(x=x0,y=y0))
+                 var=input$sampling$hyperparameters[[1]],
+                 scale=input$sampling$hyperparameters[[2]]/sqrt(8),
+                 nu=1,
+                 win = environment_list$win,
+                 xy=list(x=x0,y=y0))
 
 Lam <- attr(Samp_PP, 'Lambda')
 
 Samp_GRF  <- log(Lam$v)
 
-df.sp2 <- SpatialPointsDataFrame(coords = gridlocs,data = data.frame(w=c(anti_t(rotate(rotate(log(Lam$v))))),
-                                                                     ew=c(anti_t(rotate(rotate((Lam$v)))))))
+df.sp2 <- SpatialPointsDataFrame(coords = gridlocs,
+                                 data = data.frame(w=c(anti_t(rotate(rotate(log(Lam$v))))),
+                                            ew=c(anti_t(rotate(rotate((Lam$v)))))))
 
 df.sp2$retprob <- psych::logistic(df.sp2$w)
 r <- raster(df.sp2)

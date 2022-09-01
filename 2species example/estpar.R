@@ -1,8 +1,11 @@
 library(nimble)
 est_par <- function(omega){
   
-  inla.setOption(pardiso.license= "pardiso.lic")
-  control.compute=list(openmp.strategy="pardiso.parallel")
+  if(any(omega) < 0 | any(omega) > 1) stop("Components of omega should be positive")
+  
+  
+  #inla.setOption(pardiso.license= "pardiso.lic")
+  #control.compute=list(openmp.strategy="pardiso.parallel")
   #inla.pardiso.check()
   # x<- get("x")
   # csdata <- get("csdata",envir = eval(get(paste0("a",x))))
@@ -55,11 +58,11 @@ est_par <- function(omega){
     cmp1[[i]] <- (paste0("+ beta0",i,"(1)", 
                          "+ beta0thin(1)",
                          "+ beta0det" ,i, "(1)",
-                         "+w1",i,"(map = coordinates, model =","spdes[[",i, "]])", 
-                         "+ w2(map = coordinates, model = spde2)+",
-                         "cov1",i, "(map=cov1.spix,model='linear') +",
-                         "cov2(map=cov2.spix,model='linear')+",
-                         "cov3",i, "(map=cov3.spix,model='linear')"))
+                         "+w1",i,"(main = coordinates, model =","spdes[[",i, "]])", 
+                         "+ w2(main = coordinates, model = spde2)+",
+                         "cov1",i, "(main=cov1.spix,model='linear') +",
+                         "cov2(main=cov2.spix,model='linear')+",
+                         "cov3",i, "(main=cov3.spix,model='linear')"))
   }
   cmp <- as.formula(paste0("~ -1",do.call("paste0",cmp1)))
   
@@ -150,7 +153,15 @@ est_par <- function(omega){
                        lik3[[1]],lik3[[2]],
                        options = list(control.inla = list(strategy = "gaussian",
                                                           int.strategy = "eb"),
-                                      max.iter=50))
+                                      bru_method = list(
+                                        taylor = "pandemic",
+                                        search = "all",
+                                        factor = (1 + sqrt(5)) / 2,
+                                        rel_tol = 0.99,
+                                        max_step = 2,
+                                        lin_opt_method = "onestep"
+                                      ), #change to 0.01
+                                      bru_max_iter=5)) #change to 50
   
   #postsamples <- INLA::inla.posterior.sample.eval(fun=function(x){x},samples=INLA::inla.posterior.sample(n = 1000,result = fit2,intern = FALSE))
   
@@ -158,6 +169,55 @@ est_par <- function(omega){
   else{assign("listout",rbind(listout,fit2))}
   
   #assign("listout",rbind(listout,fit2),envir=parent.frame())
+  
+  plots = FALSE
+  if(plots == TRUE){
+    require(ggpubr)
+true_values <- c(0.8, 1.3, 2, 1.5, -1.5, -2, 2.5, -0.3, -0.12, -0.5)
+title_names <- noquote(c("beta[01]", "alpha[01]", "gamma[01]", 
+                 "beta[11]", "alpha[11]", "gamma[11]",
+                 "beta[02]", "gamma[02]",
+                 "beta[12]",  "gamma[12]"
+                 ))
+    pp <- lapply(as.list(c(seq(1:length(fit2$names.fixed)))), function(x){
+      plot(fit2, fit2$names.fixed[[x]])+
+        geom_vline(xintercept = true_values[x], linetype = 2, col = "red")+
+        theme_bw()+
+        labs(title = parse(text = title_names[x]))+
+        xlab("")+
+        ylab("")
+      
+      #p + ggtitle(label =expression(title_names[x]) )
+      #p + annotate("text",x = 2, y = 0.3, 
+        #           parse = TRUE, label = title_names[[x]])
+      })
+    
+    ggarrange(pp[[1]], pp[[2]], pp[[3]], pp[[4]], pp[[5]],
+              pp[[6]], pp[[7]], pp[[8]], pp[[9]], pp[[10]])
+    
+    names_random <- c("Range for w11", "Stdev for w11",
+                              "Range for w2", "Stdev for w2",
+                              "Range for w12", "Stdev for w12")
+    true_values_r <- c(1.2, 0.2, 2.5, 0.2, 2.5, 1.2 )
+    ppr <- lapply(as.list(c(seq(1:length(names_random)))), function(x){
+      plot(fit2, names_random[x])+
+        geom_vline(xintercept = true_values_r[x], linetype = 2, col = "red")+
+        theme_bw()+
+        labs(title = names_random[x])+
+        xlab("")+
+        ylab("")
+    })
+    
+    ggarrange(pp[[1]], pp[[2]], pp[[3]], pp[[4]], pp[[5]],
+              pp[[6]], pp[[7]], pp[[8]], pp[[9]], pp[[10]],
+              ppr[[1]],ppr[[2]], ppr[[3]], ppr[[4]], ppr[[5]],
+              ppr[[6]] )
+    
+  }
+  
+
+  
+  
   
   alpha0 <- alpha1 <- beta0 <- beta1 <- gamma0 <- gamma1<- c()
   tmp <- fit2$marginals.fixed
@@ -185,7 +245,7 @@ est_par <- function(omega){
   obs.df <- list()
   for(i in 1:nspecies){
     obs.df[[i]] <- data.frame(coordx = lik1[[i]]$data@coords[,1],coordy = lik1[[i]]$data@coords[,2],
-                              y=lik1[[i]]$data$BRU_response_cp
+                              y=lik1[[i]]$data$BRU_aggregate
     )
     
     obs.df[[i]] <- obs.df[[i]][which(obs.df[[i]]$y==1),]
@@ -238,15 +298,15 @@ nimble_INLA <- nimbleRcall(
   Rfun = 'est_par'
 )
 
-  CnimbleINLA <- compileNimble(nimble_INLA)
+  #CnimbleINLA <- compileNimble(nimble_INLA)
   
   #Testing the compiled function. 
   #Should give the same results as fit.inla
   
-  ii <- 0
+  #ii <- 0
   listout <- list()
   
-  class_prob <- matrix(c(0.9, 0.1,
-                         0.05, 0.95),
-                       nrow=2, ncol=2, byrow = TRUE)
-  CnimbleINLA(class_prob)
+   class_prob <- matrix(c(0.17, 0.83,
+                          0.96, 0.04),
+                      nrow=2, ncol=2, byrow = TRUE)
+   CnimbleINLA(class_prob)

@@ -24,7 +24,10 @@ csdata <- function(nspecies,input,cov,idxs,domain=NULL,seed,plot=list(all=TRUE),
   ext <- extent(aa)
   pts <- SpatialPoints(coords = matrix(ext,ncol=2),proj4string = crs(aa))
   max.dist <- spDists(pts)[1,2]
-  mesh <- inla.mesh.2d(loc.domain = coordsmat,max.edge = c(0.02*max.dist,0.10*max.dist),offset = c(0.3, 1),cutoff = 0.2*max.dist)
+  mesh <- inla.mesh.2d(loc.domain = coordsmat,
+                       max.edge = c(0.02*max.dist,0.10*max.dist),
+                       offset = c(0.3, 1),
+                       cutoff = 0.2*max.dist)
   
   ## Converting the covariates provided into a raster, image and pixels ##
   if(is.list(cov)){
@@ -95,11 +98,19 @@ csdata <- function(nspecies,input,cov,idxs,domain=NULL,seed,plot=list(all=TRUE),
     
     eco_linpred <- paste(c("input$ecological$fixed.effect[[1]][i]",eco_form),collapse="+")
     
+    #needs random field package which is currently not working
     for(i in 1:nspecies){
       x0 <- eco_covs.im[[1]]$xcol
       y0 <- eco_covs.im[[1]]$yrow
-      Eco_PP[[i]] <- rLGCP(model="matern",mu=eval(parse(text=eco_linpred)),
-                           var=input$ecological$hyperparameters[[1]][i],scale=input$ecological$hyperparameters[[2]][i]/sqrt(8),nu=1,win = win,xy=list(x=x0,y=y0))
+       Eco_PP[[i]] <- rLGCP(model="matern",mu=eval(parse(text=eco_linpred)),
+                           var=input$ecological$hyperparameters[[1]][i],
+                          scale=input$ecological$hyperparameters[[2]][i]/sqrt(8),
+                           nu=1,
+                           win = win,
+                          xy=list(x=x0,y=y0))
+      #stpp::rlgcp(s.region = win, var.grf = 1, mean.grf = 2, scale = 1)
+      
+      
       
     }
     
@@ -252,3 +263,4 @@ csdata <- function(nspecies,input,cov,idxs,domain=NULL,seed,plot=list(all=TRUE),
               species_raster=species_rast,lambda_obs_raster=lambda_obs_raster))
   
 }
+

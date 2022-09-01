@@ -35,11 +35,11 @@ est_par <- function(omega){
     cmp1[[i]] <- (paste0("+ beta0",i,"(1)", 
                          "+ beta0thin(1)",
                          "+ beta0det" ,i, "(1)",
-                         "+w1",i,"(map = coordinates, model =","spdes[[",i, "]])", 
-                         "+ w2(map = coordinates, model = spde2)+",
-                         "cov1",i, "(map=cov1.spix,model='linear') +",
-                         "cov2(map=cov2.spix,model='linear')+",
-                         "cov3",i, "(map=cov3.spix,model='linear')"))
+                         "+w1",i,"(main = coordinates, model =","spdes[[",i, "]])", 
+                         "+ w2(main = coordinates, model = spde2)+",
+                         "cov1",i, "(main=cov1.spix,model='linear') +",
+                         "cov2(main=cov2.spix,model='linear')+",
+                         "cov3",i, "(main=cov3.spix,model='linear')"))
   }
   cmp <- as.formula(paste0("~ -1",do.call("paste0",cmp1)))
   
@@ -144,7 +144,10 @@ est_par <- function(omega){
               lik3[[1]],lik3[[2]],lik3[[3]],lik3[[4]],
               options = list(control.inla = list(strategy = "gaussian",
                                                  int.strategy = "eb"),
-                             max.iter=50))
+                             max.iter=10,
+                             tolerance = 0.90)
+             # )
+              )
   alpha0 <- alpha1 <- beta0 <- beta1 <- gamma0 <- gamma1<- c()
   tmp <- fit2$marginals.fixed
   alpha0 <- c(alpha0, INLA::inla.emarginal(function(x) x,tmp[paste0("beta0thin")][[1]]))
