@@ -1,0 +1,7 @@
+
+Dataset: Macaulay Library Audio and Video Collection
+Rights as supplied: http://creativecommons.org/publicdomain/zero/1.0/legalcode
+Dataset: iNaturalist Research-grade Observations
+Rights as supplied: http://creativecommons.org/licenses/by-nc/4.0/legalcode
+Dataset: EOD – eBird Observation Dataset
+Rights as supplied: http://creativecommons.org/licenses/by/4.0/legalcode

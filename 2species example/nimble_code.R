@@ -34,7 +34,8 @@ myRW_dirichlet <- nimbleFunction(
     ## numeric value generation
     #d <- length(targetAsScalar)
     d <- length(model$expandNodeNames(target))
-    thetaVec         <- rep(0, d)
+    dr <- length(targetAsScalar)/d
+    thetaVec         <- rep(0, dr)
     scaleVec         <- rep(scaleOriginal, d)
     timesRan         <- 0
     timesAcceptedVec <- rep(0, d)
@@ -42,27 +43,27 @@ myRW_dirichlet <- nimbleFunction(
     optimalAR        <- 0.44
     gamma1           <- 0
     ## checks
-   # if(length(model$expandNodeNames(target)) > 1)    stop('RW_dirichlet sampler only applies to one target node')
+    # if(length(model$expandNodeNames(target)) > 1)    stop('RW_dirichlet sampler only applies to one target node')
     #if(model$getDistribution(target) != 'ddirch')    stop('can only use RW_dirichlet sampler for dirichlet distributions')
   },
   run = function() {
-   # extralpD <- model$calculateDiff(calcNodesNoSelf)
+    # extralpD <- model$calculateDiff(calcNodesNoSelf)
     for(i in 1:d){
       #targets[i] <- targets[i]
       
-    if(thetaVec[1] == 0)   thetaVec <<- values(model, targets[i])   ## initialization
-    
-    alphaVec <- model$getParam(targets[i], 'alpha')
-   #for(i in 1:d) {
+      if(thetaVec[1] == 0)   thetaVec <<- values(model, targets[i])   ## initialization
+      
+      alphaVec <- model$getParam(targets[i], 'alpha')
+      #for(i in 1:d) {
       currentValue <- thetaVec
-      propLogScale <- rnorm(d, mean = 0, sd = scaleVec[1])
+      propLogScale <- rnorm(dr, mean = 0, sd = scaleVec[1])
       #propValue <- currentValue * exp(propLogScale)
       propValue <- exp(propLogScale)
       if(all(propValue != 0)) {
         thetaVecProp <- thetaVec
         thetaVecProp <- propValue
         values(model, targets[i]) <<- thetaVecProp / sum(thetaVecProp)
-        logMHR <- sum((alphaVec-1)*propValue) - sum((alphaVec-1)*currentValue) +sum(exp(-0.5 * (currentValue^2 - log(propValue)^2)/scaleVec[1])) + model$calculateDiff(calcNodesNoSelf)
+        logMHR <- sum((alphaVec-1)*propValue) - sum((alphaVec-1)*currentValue) +sum(exp(-0.5 * (log(currentValue)^2 - log(propValue)^2)/scaleVec[1])*(propValue/currentValue)) + model$calculateDiff(calcNodesNoSelf)
         jump <- decide(logMHR)
       } else jump <- FALSE
       if(adaptive & jump)   timesAcceptedVec[i] <<- timesAcceptedVec[i] + 1
@@ -106,6 +107,9 @@ myRW_dirichlet <- nimbleFunction(
 
 
 assign('myRW_dirichlet', myRW_dirichlet, envir = .GlobalEnv)
+
+
+
 
 
 
